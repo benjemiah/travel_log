@@ -1,0 +1,13 @@
+{
+  "name": "Atlas – privates Reisetagebuch",
+  "short_name": "Atlas",
+  "description": "Deine Reisen auf einem privaten 3D-Globus",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07131f",
+  "theme_color": "#07131f",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
