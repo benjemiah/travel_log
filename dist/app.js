@@ -1,6 +1,6 @@
 import { calculateStats, createId, decodeBackup, formatDate, serializeBackup, tripDays } from './data.js';
 import { loadDatabase, saveDatabase } from './storage.js';
-import { AtlasGlobe } from './globe.js';
+import { CesiumGlobe } from './cesium-globe.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -132,14 +132,14 @@ function renderTopCountry(stats) {
   $('#topCountry').textContent = country || 'Noch offen';
   $('#topCountryDetail').textContent = country
     ? `${visits} ${visits === 1 ? 'Aufenthalt' : 'Aufenthalte'} in deinem Atlas`
-    : 'Trage deine erste Reise ein.';
+    : 'Noch keine Daten';
 }
 
 function renderYearChart(stats) {
   const chart = $('#yearChart');
   const rows = [...stats.yearDays.entries()].sort((a, b) => a[0] - b[0]);
   if (!rows.length) {
-    chart.innerHTML = '<p class="chart-placeholder">Mit deinen Reisen entsteht hier eine Jahresübersicht.</p>';
+    chart.innerHTML = '<p class="chart-placeholder">Noch keine Daten</p>';
     return;
   }
   const maximum = Math.max(...rows.map(([, days]) => days));
@@ -155,7 +155,7 @@ function renderContinents(stats) {
   const list = $('#continentList');
   const rows = [...stats.continents.entries()].sort((a, b) => b[1] - a[1]);
   if (!rows.length) {
-    list.innerHTML = '<p class="chart-placeholder">Noch kein Kontinent markiert.</p>';
+    list.innerHTML = '<p class="chart-placeholder">Noch keine Daten</p>';
     return;
   }
   const maximum = Math.max(...rows.map(([, count]) => count));
@@ -191,8 +191,8 @@ function renderTimeline() {
   elements.timeline.hidden = trips.length === 0;
   if (!trips.length) {
     elements.emptyState.classList.toggle('is-filtered', Boolean(hasFilters));
-    elements.emptyState.querySelector('h3').textContent = hasFilters ? 'Nichts gefunden.' : 'Dein Atlas wartet.';
-    elements.emptyState.querySelector('p').textContent = hasFilters ? 'Probiere einen anderen Suchbegriff oder Zeitraum.' : 'Setze den ersten Punkt auf deiner persönlichen Weltkarte.';
+    elements.emptyState.querySelector('h3').textContent = hasFilters ? 'Nichts gefunden' : 'Noch keine Reisen';
+    elements.emptyState.querySelector('p').textContent = hasFilters ? 'Ändere Suche oder Zeitraum.' : 'Klicke auf den Globus oder füge einen Eintrag hinzu.';
     elements.emptyState.querySelector('button').hidden = Boolean(hasFilters);
     elements.timeline.innerHTML = '';
     return;
@@ -209,7 +209,7 @@ function renderTimeline() {
         <div class="trip-meta"><span>${escapeHtml(trip.country)}</span><span>${duration} ${duration === 1 ? 'Tag' : 'Tage'}</span><span class="trip-tag">${escapeHtml(trip.category)}</span></div>
         ${trip.notes ? `<p class="trip-notes">${escapeHtml(trip.notes)}</p>` : ''}
       </div>
-      <div class="trip-actions"><button class="icon-button" type="button" data-edit-trip="${escapeHtml(trip.id)}" aria-label="${escapeHtml(trip.name)} bearbeiten">↗</button></div>
+      <div class="trip-actions"><button class="icon-button" type="button" data-edit-trip="${escapeHtml(trip.id)}" aria-label="${escapeHtml(trip.name)} bearbeiten">•••</button></div>
     </article>`;
   }).join('');
 }
@@ -324,23 +324,23 @@ async function deleteCurrentTrip() {
 
 async function initialiseGlobe() {
   try {
-    world = new AtlasGlobe(elements.globe, {
+    world = new CesiumGlobe(elements.globe, {
       onGlobeClick: coordinates => openTripDialog(null, coordinates),
       onPointClick: trip => openTripDialog(trip),
+      onReady: () => elements.globeLoading.classList.add('done'),
     });
     world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, 0);
     renderGlobeData();
-    elements.globeLoading.classList.add('done');
 
     $('#zoomIn').addEventListener('click', () => {
       const view = world.pointOfView();
-      world.pointOfView({ ...view, altitude: Math.max(.75, view.altitude * .78) });
+      world.pointOfView({ ...view, altitude: Math.max(.75, view.altitude * .78) }, .35);
     });
     $('#zoomOut').addEventListener('click', () => {
       const view = world.pointOfView();
-      world.pointOfView({ ...view, altitude: Math.min(3.7, view.altitude * 1.28) });
+      world.pointOfView({ ...view, altitude: Math.min(3.7, view.altitude * 1.28) }, .35);
     });
-    $('#resetGlobe').addEventListener('click', () => world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }));
+    $('#resetGlobe').addEventListener('click', () => world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, .65));
   } catch (error) {
     elements.globeLoading.innerHTML = '<span>Globus konnte nicht geladen werden.<br>Bitte prüfe die Verbindung und lade neu.</span>';
     elements.globeTip.hidden = true;

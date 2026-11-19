@@ -10,15 +10,16 @@ Eine statische, datenschutzfreundliche GitHub-Pages-App. Besuche werden auf eine
 - Das Löschen von Website-Daten, ein Browserwechsel oder ein Geräteverlust kann lokale Daten entfernen. Deshalb regelmäßig eine JSON-Sicherung exportieren.
 - Verschiedene Browser, Profile, Geräte und eine installierte PWA haben gegebenenfalls getrennte Speicher.
 
-Der 3D-Globus wird vollständig lokal im Browser gezeichnet. Die App lädt keine Karten, Schriften, Analyse-Skripte oder sonstigen Dateien von Drittanbietern.
+Der 3D-Globus wird mit **CesiumJS** und der lokal ausgelieferten **Natural-Earth-II-Textur** gerendert. Die App braucht weder ein Cesium-ion-Konto noch einen Kartendienst oder API-Token. Sie lädt keine Karten, Schriften, Analyse-Skripte oder sonstigen Dateien von Drittanbietern.
 
 ## Lokal starten
 
 ```bash
+npm install
 npm run serve
 ```
 
-Dann `http://localhost:4173` öffnen. Für die reine App sind keine Abhängigkeiten und kein Build notwendig.
+Dann `http://localhost:4173` öffnen. `npm run serve` kopiert die benötigten CesiumJS-Dateien und Textur-Tiles automatisch nach `dist/vendor/`.
 
 ## Tests
 

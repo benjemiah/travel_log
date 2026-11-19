@@ -25,8 +25,12 @@ jobs:
         uses: actions/checkout@v4
       - name: GitHub Pages konfigurieren
         uses: actions/configure-pages@v5
+      - name: Abhängigkeiten installieren
+        run: npm ci
       - name: Tests ausführen
         run: npm test
+      - name: CesiumJS für GitHub Pages vorbereiten
+        run: npm run build
       - name: Statische App verpacken
         uses: actions/upload-pages-artifact@v3
         with:

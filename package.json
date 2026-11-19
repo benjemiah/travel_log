@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "serve": "node scripts/serve.mjs",
+    "build": "node scripts/prepare-cesium.mjs",
+    "serve": "npm run build && node scripts/serve.mjs",
     "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "cesium": "^1.147.0"
   }
 }

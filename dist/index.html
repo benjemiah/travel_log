@@ -8,6 +8,7 @@
   <title>Atlas · Dein privates Reisetagebuch</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./vendor/cesium/Widgets/widgets.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -27,11 +28,9 @@
 
   <main id="content">
     <section class="hero" id="top" aria-labelledby="heroTitle">
-      <div class="hero-copy">
-        <p class="eyebrow">Deine Welt · Deine Erinnerungen</p>
-        <h1 id="heroTitle">Wo warst<br><em>du</em> überall?</h1>
-        <p class="hero-intro">Markiere Orte, halte Zeiträume fest und sieh, wie sich deine persönliche Weltkarte mit jeder Reise füllt.</p>
-        <div class="privacy-pill"><span aria-hidden="true">◉</span> Privat by design · nur auf diesem Gerät</div>
+      <div class="globe-heading">
+        <h1 id="heroTitle">Deine Reisen</h1>
+        <p>Alle Daten bleiben in diesem Browser.</p>
       </div>
       <div class="globe-stage" id="globeStage">
         <div id="globe" role="img" aria-label="Interaktiver 3D-Globus mit deinen besuchten Orten"></div>
@@ -39,7 +38,7 @@
           <span class="loader-orbit"></span>
           <span>Globus wird geladen …</span>
         </div>
-        <div class="globe-tip" id="globeTip">Globus anklicken, um einen Ort zu markieren</div>
+        <div class="globe-tip" id="globeTip">Klicken, um einen Ort hinzuzufügen</div>
         <div class="globe-controls" aria-label="Globussteuerung">
           <button type="button" id="zoomIn" aria-label="Hineinzoomen">＋</button>
           <button type="button" id="zoomOut" aria-label="Herauszoomen">−</button>
@@ -58,10 +57,7 @@
 
     <section class="content-section journey-section" aria-labelledby="journeysTitle">
       <div class="section-heading">
-        <div>
-          <p class="eyebrow dark">Reisearchiv</p>
-          <h2 id="journeysTitle">Deine Geschichten,<br>chronologisch.</h2>
-        </div>
+        <h2 id="journeysTitle">Reisen</h2>
         <div class="list-tools">
           <label class="search-field">
             <span class="sr-only">Reisen durchsuchen</span>
@@ -72,49 +68,43 @@
         </div>
       </div>
       <div class="empty-state" id="emptyState">
-        <div class="empty-compass" aria-hidden="true">⌖</div>
-        <h3>Dein Atlas wartet.</h3>
-        <p>Setze den ersten Punkt auf deiner persönlichen Weltkarte.</p>
-        <button class="button button-ink" type="button" data-open-trip>Erste Reise eintragen</button>
+        <h3>Noch keine Reisen</h3>
+        <p>Klicke auf den Globus oder füge einen Eintrag hinzu.</p>
+        <button class="button button-ink" type="button" data-open-trip>Reise eintragen</button>
       </div>
       <div class="timeline" id="timeline" aria-live="polite"></div>
     </section>
 
     <section class="content-section insights" aria-labelledby="insightsTitle">
       <div class="section-heading compact">
-        <div>
-          <p class="eyebrow dark">Dein Reiseprofil</p>
-          <h2 id="insightsTitle">Zahlen mit Fernweh.</h2>
-        </div>
+        <h2 id="insightsTitle">Statistik</h2>
       </div>
       <div class="insight-grid">
         <article class="insight-card highlight-card">
           <p class="card-kicker">Meistbesuchtes Land</p>
           <div class="big-answer" id="topCountry">Noch offen</div>
-          <p id="topCountryDetail">Trage deine erste Reise ein.</p>
-          <div class="abstract-map" aria-hidden="true"><span></span><span></span><span></span></div>
+          <p id="topCountryDetail">Noch keine Daten</p>
         </article>
         <article class="insight-card">
           <p class="card-kicker">Reisetage nach Jahr</p>
-          <div class="year-chart" id="yearChart"><p class="chart-placeholder">Mit deinen Reisen entsteht hier eine Jahresübersicht.</p></div>
+          <div class="year-chart" id="yearChart"><p class="chart-placeholder">Noch keine Daten</p></div>
         </article>
         <article class="insight-card">
           <p class="card-kicker">Deine Kontinente</p>
-          <div class="continent-list" id="continentList"><p class="chart-placeholder">Noch kein Kontinent markiert.</p></div>
+          <div class="continent-list" id="continentList"><p class="chart-placeholder">Noch keine Daten</p></div>
         </article>
       </div>
     </section>
 
     <section class="backup-section" id="backup" aria-labelledby="backupTitle">
       <div class="backup-copy">
-        <p class="eyebrow">Daten & Sicherung</p>
-        <h2 id="backupTitle">Deine Daten gehören dir.</h2>
-        <p>Atlas hat kein Konto und keinen Server. Deine Einträge bleiben in diesem Browser, bis du sie löschst. Sichere sie regelmäßig als JSON-Datei.</p>
+        <h2 id="backupTitle">Datensicherung</h2>
+        <p>Einträge werden nur in diesem Browser gespeichert. Exportiere regelmäßig eine JSON-Sicherung.</p>
         <p class="backup-status" id="backupStatus">Noch keine Sicherung in diesem Browser erstellt.</p>
       </div>
       <div class="backup-actions">
-        <button class="button button-acid" type="button" id="exportBackup">Sicherung herunterladen <span>↓</span></button>
-        <button class="button button-outline-light" type="button" id="shareBackup">Sicherung teilen <span>↗</span></button>
+        <button class="button button-acid" type="button" id="exportBackup">Sicherung herunterladen</button>
+        <button class="button button-outline-light" type="button" id="shareBackup">Sicherung teilen</button>
         <button class="text-button" type="button" id="importBackup">Sicherung wiederherstellen</button>
         <input type="file" id="backupFile" accept=".json,application/json" hidden>
       </div>
@@ -131,7 +121,7 @@
 
   <footer>
     <a class="brand footer-brand" href="#top"><span class="brand-mark">◎</span> ATLAS</a>
-    <p>Ein privates Reisetagebuch. Keine Cloud. Kein Tracking.</p>
+    <p>Lokal gespeichert · CesiumJS</p>
     <a href="#backup">Daten sichern</a>
   </footer>
 
@@ -188,6 +178,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script>window.CESIUM_BASE_URL = new URL('./vendor/cesium/', document.baseURI).href;</script>
+  <script src="./vendor/cesium/Cesium.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
