@@ -27,12 +27,29 @@ export function tripDays(trip) {
   const start = localDate(trip.startDate);
   const end = localDate(trip.endDate);
   if (!start || !end || end < start) return 0;
-  return Math.round((end - start) / 86_400_000) + 1;
+  return Math.round((Date.UTC(end.getFullYear(), end.getMonth(), end.getDate())
+    - Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) / 86_400_000) + 1;
+}
+
+export function validMonth(value) {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(value || '') && Number(value.slice(0, 4)) > 0;
+}
+
+export function validPeriod(start, end) {
+  return Boolean(end >= start && ((validMonth(start) && validMonth(end)) || (localDate(start) && localDate(end))));
 }
 
 export function formatDate(value, options = { day: '2-digit', month: 'short', year: 'numeric' }) {
-  const date = localDate(value);
-  return date ? new Intl.DateTimeFormat('de-DE', options).format(date) : '–';
+  const monthOnly = validMonth(value);
+  const date = localDate(monthOnly ? `${value}-01` : value);
+  const displayOptions = { ...options };
+  if (monthOnly) delete displayOptions.day;
+  return date ? new Intl.DateTimeFormat('de-DE', displayOptions).format(date) : '–';
+}
+
+export function formatPeriod(trip) {
+  const start = formatDate(trip.startDate);
+  return trip.startDate === trip.endDate ? start : `${start} – ${formatDate(trip.endDate)}`;
 }
 
 export function haversineKm(first, second) {
@@ -50,13 +67,16 @@ export function calculateStats(trips) {
   const continents = new Map();
   const countryVisits = new Map();
   const yearDays = new Map();
+  const yearVisits = new Map();
   let days = 0;
 
   for (const trip of trips) {
     const duration = tripDays(trip);
     days += duration;
-    continents.set(trip.continent, (continents.get(trip.continent) || 0) + 1);
+    if (trip.continent) continents.set(trip.continent, (continents.get(trip.continent) || 0) + 1);
     countryVisits.set(trip.country, (countryVisits.get(trip.country) || 0) + 1);
+    const year = Number(trip.startDate.slice(0, 4));
+    yearVisits.set(year, (yearVisits.get(year) || 0) + 1);
     const start = localDate(trip.startDate);
     const end = localDate(trip.endDate);
     if (start && end) {
@@ -85,6 +105,7 @@ export function calculateStats(trips) {
     distanceKm: Math.round(distanceKm),
     topCountry,
     yearDays,
+    yearVisits,
   };
 }
 
@@ -92,10 +113,10 @@ function validTrip(trip) {
   if (!trip || typeof trip !== 'object') return false;
   const strings = ['id', 'name', 'country', 'continent', 'startDate', 'endDate', 'category', 'notes'];
   if (!strings.every(key => typeof trip[key] === 'string')) return false;
-  if (!trip.id || !trip.name.trim() || !trip.country.trim() || !trip.continent.trim()) return false;
+  if (!trip.id || !trip.name.trim() || !trip.country.trim()) return false;
   if (!Number.isFinite(trip.lat) || trip.lat < -90 || trip.lat > 90) return false;
   if (!Number.isFinite(trip.lng) || trip.lng < -180 || trip.lng > 180) return false;
-  return Boolean(localDate(trip.startDate) && localDate(trip.endDate) && tripDays(trip) > 0);
+  return validPeriod(trip.startDate, trip.endDate);
 }
 
 export function decodeBackup(raw) {

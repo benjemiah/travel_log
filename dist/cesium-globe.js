@@ -1,14 +1,16 @@
 const HEIGHT_PER_ALTITUDE = 7_000_000;
-const MAP_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const MIN_HEIGHT = 250;
+const MAX_HEIGHT = 26_000_000;
+const IMAGERY_URL = 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer';
+const LABELS_URL = 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
 
 export class CesiumGlobe {
-  constructor(container, { onGlobeClick, onPointClick, onReady } = {}) {
+  constructor(container, { onGlobeClick, onPointClick, onReady, onMapError } = {}) {
     const Cesium = window.Cesium;
     if (!Cesium) throw new Error('CesiumJS wurde nicht geladen.');
     this.Cesium = Cesium;
     this.onGlobeClick = onGlobeClick;
     this.onPointClick = onPointClick;
-    this.lastInteraction = performance.now();
     this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.entityTrips = new Map();
     this.selectionEntityIds = new Set();
@@ -32,8 +34,9 @@ export class CesiumGlobe {
       vrButton: false,
       infoBox: false,
       selectionIndicator: false,
-      shouldAnimate: true,
-      requestRenderMode: false,
+      shouldAnimate: false,
+      requestRenderMode: true,
+      maximumRenderTimeChange: Number.POSITIVE_INFINITY,
       contextOptions: { webgl: { alpha: true, antialias: true } },
     });
 
@@ -46,48 +49,63 @@ export class CesiumGlobe {
     scene.skyAtmosphere.atmosphereLightIntensity = 8;
     scene.globe.enableLighting = false;
     scene.globe.showGroundAtmosphere = true;
-    scene.globe.baseColor = Cesium.Color.fromCssColorString('#12384a');
+    scene.globe.baseColor = Cesium.Color.fromCssColorString('#235677');
     scene.globe.maximumScreenSpaceError = 2;
     scene.fog.enabled = false;
     scene.highDynamicRange = true;
 
-    baseLayer.readyEvent.addEventListener(() => {
-      baseLayer.brightness = .72;
-      baseLayer.contrast = 1.18;
-      baseLayer.saturation = .72;
-      baseLayer.gamma = .92;
-      baseLayer.hue = -.03;
-    });
+    const controls = scene.screenSpaceCameraController;
+    controls.minimumZoomDistance = MIN_HEIGHT;
+    controls.maximumZoomDistance = MAX_HEIGHT;
+    controls.zoomFactor = 3;
+    controls.inertiaZoom = .65;
+    controls.inertiaSpin = .75;
+    controls.maximumMovementRatio = .08;
+    controls.enableTilt = false;
+    controls.enableLook = false;
+    controls.zoomEventTypes = [Cesium.CameraEventType.WHEEL, Cesium.CameraEventType.PINCH];
+    this.viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 
-    const streetProvider = new Cesium.UrlTemplateImageryProvider({
-      url: MAP_TILE_URL,
+    // Keep the bundled earth texture underneath streaming imagery, including
+    // when offline. Satellite tiles and transparent labels form one view.
+    this.satelliteLayer = Cesium.ImageryLayer.fromProviderAsync(
+      Cesium.ArcGisMapServerImageryProvider.fromUrl(IMAGERY_URL, {
+        enablePickFeatures: false,
+        maximumLevel: 19,
+      }),
+    );
+    this.satelliteLayer.errorEvent.addEventListener(() => onMapError?.());
+    this.satelliteLayer.readyEvent.addEventListener(provider => {
+      provider.errorEvent.addEventListener(error => {
+        if (error.timesRetried > 1 || !navigator.onLine) onMapError?.();
+      });
+    });
+    this.viewer.imageryLayers.add(this.satelliteLayer);
+
+    const labelsProvider = new Cesium.UrlTemplateImageryProvider({
+      url: LABELS_URL,
       maximumLevel: 19,
       enablePickFeatures: false,
-      hasAlphaChannel: false,
+      hasAlphaChannel: true,
       credit: new Cesium.Credit(
-        '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
-        true,
+        '<a href="https://www.arcgis.com/home/item.html?id=30e5fe3149c34df1ba922e6f5bbf808f" target="_blank" rel="noopener noreferrer">Ortsnamen: Esri, HERE, Garmin, © OpenStreetMap contributors, GIS community</a>',
       ),
     });
-    this.streetLayer = new Cesium.ImageryLayer(streetProvider, {
-      brightness: .78,
-      contrast: 1.08,
-      saturation: .72,
-      gamma: .92,
-    });
-    this.viewer.imageryLayers.add(this.streetLayer);
-    this.streetLayer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
-    this.streetLayer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR;
+    this.viewer.imageryLayers.add(new Cesium.ImageryLayer(labelsProvider));
 
     this.dataSource = new Cesium.CustomDataSource('atlas-trips');
-    this.gridDataSource = new Cesium.CustomDataSource('atlas-grid');
     this.selectionDataSource = new Cesium.CustomDataSource('atlas-selection');
-    this.createGrid();
-    this.viewer.dataSources.add(this.gridDataSource);
     this.viewer.dataSources.add(this.dataSource);
     this.viewer.dataSources.add(this.selectionDataSource);
     this.bindPicking();
-    this.bindRotation();
+    this.viewer.canvas.addEventListener('pointerdown', () => {
+      this.zoomTargetHeight = null;
+      this.viewer.camera.cancelFlight();
+    }, { passive: true });
+    this.viewer.canvas.addEventListener('wheel', () => {
+      this.zoomTargetHeight = null;
+      this.viewer.camera.cancelFlight();
+    }, { passive: true });
 
     let readyReported = false;
     const removeProgressListener = scene.globe.tileLoadProgressEvent.addEventListener(remaining => {
@@ -110,7 +128,6 @@ export class CesiumGlobe {
     const { Cesium, viewer } = this;
     const handler = viewer.screenSpaceEventHandler;
     handler.setInputAction(movement => {
-      this.lastInteraction = performance.now();
       const picked = viewer.scene.pick(movement.position);
       const pickedId = picked?.id?.id;
       if (pickedId && this.entityTrips.has(pickedId)) {
@@ -129,54 +146,6 @@ export class CesiumGlobe {
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
 
-  createGrid() {
-    const { Cesium } = this;
-    const entities = this.gridDataSource.entities;
-    const gridHeight = 28_000;
-    const addLine = (id, coordinates, major) => entities.add({
-      id,
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights(coordinates),
-        width: major ? 1.25 : .8,
-        arcType: Cesium.ArcType.NONE,
-        material: Cesium.Color.WHITE.withAlpha(major ? .25 : .13),
-      },
-    });
-
-    entities.suspendEvents();
-    for (let latitude = -75; latitude <= 75; latitude += 15) {
-      const coordinates = [];
-      for (let longitude = -180; longitude <= 180; longitude += 3) {
-        coordinates.push(longitude, latitude, gridHeight);
-      }
-      addLine(`grid-lat-${latitude}`, coordinates, latitude % 30 === 0);
-    }
-    for (let longitude = -180; longitude < 180; longitude += 15) {
-      const coordinates = [];
-      for (let latitude = -87; latitude <= 87; latitude += 3) {
-        coordinates.push(longitude, latitude, gridHeight);
-      }
-      addLine(`grid-lng-${longitude}`, coordinates, longitude % 30 === 0);
-    }
-    entities.resumeEvents();
-  }
-
-  bindRotation() {
-    const { Cesium, viewer } = this;
-    const markInteraction = () => { this.lastInteraction = performance.now(); };
-    viewer.canvas.addEventListener('pointerdown', markInteraction, { passive: true });
-    viewer.canvas.addEventListener('wheel', markInteraction, { passive: true });
-    let previous = performance.now();
-    viewer.scene.preUpdate.addEventListener(() => {
-      const now = performance.now();
-      const seconds = Math.min(.1, (now - previous) / 1000);
-      previous = now;
-      if (!this.reduceMotion && now - this.lastInteraction > 2600) {
-        viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, -seconds * .025);
-      }
-    });
-  }
-
   setData(trips) {
     const { Cesium } = this;
     this.dataSource.entities.removeAll();
@@ -190,13 +159,12 @@ export class CesiumGlobe {
       this.dataSource.entities.add({
         id,
         name: trip.name,
-        position: Cesium.Cartesian3.fromDegrees(trip.lng, trip.lat, 16_000),
+        position: Cesium.Cartesian3.fromDegrees(trip.lng, trip.lat, 10),
         point: {
           pixelSize: 13,
-          color: Cesium.Color.fromCssColorString('#d9ff62'),
-          outlineColor: Cesium.Color.fromCssColorString('#07131f'),
+          color: Cesium.Color.fromCssColorString('#ed681c'),
+          outlineColor: Cesium.Color.WHITE,
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1_000_000, 1.35, 24_000_000, .72),
         },
         label: {
@@ -208,7 +176,6 @@ export class CesiumGlobe {
           backgroundPadding: new Cesium.Cartesian2(9, 6),
           pixelOffset: new Cesium.Cartesian2(0, -18),
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 16_000_000),
           scaleByDistance: new Cesium.NearFarScalar(1_000_000, 1, 16_000_000, .68),
         },
@@ -226,9 +193,9 @@ export class CesiumGlobe {
           ]),
           width: 2,
           arcType: Cesium.ArcType.GEODESIC,
-          clampToGround: false,
+          clampToGround: true,
           material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString('#ff7658').withAlpha(.9),
+            color: Cesium.Color.fromCssColorString('#ed681c').withAlpha(.9),
             dashLength: 18,
           }),
         },
@@ -245,11 +212,11 @@ export class CesiumGlobe {
     const { Cesium } = this;
     this.clearSelection(false);
     this.selectedTripId = trip.id;
-    const position = Cesium.Cartesian3.fromDegrees(trip.lng, trip.lat, 30_000);
+    const position = Cesium.Cartesian3.fromDegrees(trip.lng, trip.lat, 10);
     const pointerId = `selected-pointer-${trip.id}`;
     const ringId = `selected-ring-${trip.id}`;
     const pin = new Cesium.PinBuilder().fromColor(
-      Cesium.Color.fromCssColorString('#ff7658'),
+      Cesium.Color.fromCssColorString('#ed681c'),
       52,
     );
 
@@ -261,7 +228,6 @@ export class CesiumGlobe {
         color: Cesium.Color.TRANSPARENT,
         outlineColor: Cesium.Color.WHITE,
         outlineWidth: 3,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new Cesium.NearFarScalar(500_000, 1.15, 18_000_000, .7),
       },
     });
@@ -272,7 +238,6 @@ export class CesiumGlobe {
         image: pin,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         pixelOffset: new Cesium.Cartesian2(0, -13),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new Cesium.NearFarScalar(500_000, 1, 18_000_000, .62),
       },
     });
@@ -289,12 +254,28 @@ export class CesiumGlobe {
     if (resetSelectedId) this.selectedTripId = null;
   }
 
-  setGridVisible(visible) {
-    this.gridDataSource.show = Boolean(visible);
+  zoom(factor) {
+    const { Cesium, viewer } = this;
+    const center = new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2);
+    const target = viewer.camera.pickEllipsoid(center, viewer.scene.globe.ellipsoid);
+    const position = target ? Cesium.Cartographic.fromCartesian(target) : viewer.camera.positionCartographic;
+    const height = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT,
+      (this.zoomTargetHeight ?? viewer.camera.positionCartographic.height) * factor));
+    this.pointOfView({
+      lat: Cesium.Math.toDegrees(position.latitude),
+      lng: Cesium.Math.toDegrees(position.longitude),
+      altitude: height / HEIGHT_PER_ALTITUDE,
+    }, .3);
+    this.zoomTargetHeight = height;
   }
 
-  setMapMode(mode) {
-    this.streetLayer.show = mode === 'map';
+  resetView(duration = .65) {
+    const { viewer } = this;
+    viewer.resize();
+    const fieldOfView = Math.min(viewer.camera.frustum.fov, viewer.camera.frustum.fovy);
+    const radius = viewer.scene.globe.ellipsoid.maximumRadius;
+    const height = radius / (Math.sin(fieldOfView / 2) * .86) - radius;
+    return this.pointOfView({ lat: 32, lng: 15, altitude: height / HEIGHT_PER_ALTITUDE }, duration);
   }
 
   pointOfView(view, duration = .6) {
@@ -307,12 +288,13 @@ export class CesiumGlobe {
         altitude: position.height / HEIGHT_PER_ALTITUDE,
       };
     }
-    this.lastInteraction = performance.now();
+    this.zoomTargetHeight = null;
+    viewer.camera.cancelFlight();
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(
         Number.isFinite(view.lng) ? view.lng : 15,
         Number.isFinite(view.lat) ? view.lat : 24,
-        Math.max(.75, Math.min(3.7, view.altitude ?? 2.15)) * HEIGHT_PER_ALTITUDE,
+        Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, (view.altitude ?? 1.85) * HEIGHT_PER_ALTITUDE)),
       ),
       orientation: {
         heading: 0,

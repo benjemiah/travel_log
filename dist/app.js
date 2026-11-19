@@ -1,6 +1,7 @@
-import { calculateStats, createId, decodeBackup, formatDate, serializeBackup, tripDays } from './data.js';
+import { calculateStats, createId, decodeBackup, formatDate, formatPeriod, serializeBackup, validPeriod } from './data.js';
 import { loadDatabase, saveDatabase } from './storage.js';
-import { CesiumGlobe } from './cesium-globe.js?v=5';
+import { CesiumGlobe } from './cesium-globe.js?v=6';
+import { reversePlace, searchPlaces } from './places.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -28,6 +29,8 @@ let database;
 let world = null;
 let toastTimer = null;
 let saveRevision = 0;
+let placeRequest = null;
+let placeResults = [];
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, character => ({
@@ -44,7 +47,7 @@ function showToast(message, duration = 3500) {
 
 function setSaveState(state, text) {
   elements.saveState.className = `save-state ${state}`;
-  elements.saveState.innerHTML = '<span class="status-dot"></span>' + escapeHtml(text);
+  elements.saveState.textContent = text;
 }
 
 async function persist() {
@@ -122,7 +125,6 @@ function formatDistance(value) {
 function renderMetrics(stats) {
   $('#countriesMetric').textContent = stats.countries;
   $('#placesMetric').textContent = stats.places;
-  $('#daysMetric').textContent = stats.days;
   $('#continentsMetric').textContent = stats.continentCount;
   $('#distanceMetric').textContent = formatDistance(stats.distanceKm);
 }
@@ -137,16 +139,16 @@ function renderTopCountry(stats) {
 
 function renderYearChart(stats) {
   const chart = $('#yearChart');
-  const rows = [...stats.yearDays.entries()].sort((a, b) => a[0] - b[0]);
+  const rows = [...stats.yearVisits.entries()].sort((a, b) => a[0] - b[0]);
   if (!rows.length) {
     chart.innerHTML = '<p class="chart-placeholder">Noch keine Daten</p>';
     return;
   }
-  const maximum = Math.max(...rows.map(([, days]) => days));
-  chart.innerHTML = rows.map(([year, days]) => `
-    <div class="year-bar-wrap" title="${year}: ${days} Reisetage">
-      <span class="year-value">${days} T.</span>
-      <span class="year-bar" style="height:${Math.max(5, days / maximum * 150)}px"></span>
+  const maximum = Math.max(...rows.map(([, visits]) => visits));
+  chart.innerHTML = rows.map(([year, visits]) => `
+    <div class="year-bar-wrap" title="${year}: ${visits} Reisen">
+      <span class="year-value">${visits}</span>
+      <span class="year-bar" style="height:${Math.max(5, visits / maximum * 110)}px"></span>
       <span class="year-label">${year}</span>
     </div>`).join('');
 }
@@ -191,8 +193,8 @@ function renderTimeline() {
   elements.timeline.hidden = trips.length === 0;
   if (!trips.length) {
     elements.emptyState.classList.toggle('is-filtered', Boolean(hasFilters));
-    elements.emptyState.querySelector('h3').textContent = hasFilters ? 'Nichts gefunden' : 'Noch keine Reisen';
-    elements.emptyState.querySelector('p').textContent = hasFilters ? 'Ändere Suche oder Zeitraum.' : 'Klicke auf den Globus oder füge einen Eintrag hinzu.';
+    elements.emptyState.querySelector('h3').textContent = hasFilters ? 'Nichts gefunden' : 'Wo warst du schon?';
+    elements.emptyState.querySelector('p').textContent = hasFilters ? 'Ändere Suche oder Zeitraum.' : 'Tippe auf den Globus oder suche nach deinem ersten Reiseziel.';
     elements.emptyState.querySelector('button').hidden = Boolean(hasFilters);
     elements.timeline.innerHTML = '';
     return;
@@ -200,13 +202,11 @@ function renderTimeline() {
   elements.timeline.innerHTML = trips.map(trip => {
     const date = formatDate(trip.startDate, { day: '2-digit', month: 'short' });
     const year = trip.startDate.slice(0, 4);
-    const duration = tripDays(trip);
     return `<article class="trip-row">
       <div class="trip-date"><strong>${escapeHtml(date)}</strong><span>${year}</span></div>
-      <span class="trip-node" aria-hidden="true"></span>
       <div class="trip-main">
         <h3>${escapeHtml(trip.name)}</h3>
-        <div class="trip-meta"><span>${escapeHtml(trip.country)}</span><span>${duration} ${duration === 1 ? 'Tag' : 'Tage'}</span><span class="trip-tag">${escapeHtml(trip.category)}</span></div>
+        <div class="trip-meta"><span>${escapeHtml(trip.country)}</span>${trip.startDate !== trip.endDate ? `<span>${escapeHtml(formatPeriod(trip))}</span>` : ''}</div>
         ${trip.notes ? `<p class="trip-notes">${escapeHtml(trip.notes)}</p>` : ''}
       </div>
       <div class="trip-actions"><button class="icon-button" type="button" data-edit-trip="${escapeHtml(trip.id)}" aria-label="${escapeHtml(trip.name)} bearbeiten">•••</button></div>
@@ -233,30 +233,135 @@ function render() {
 
 function field(id) { return document.getElementById(id); }
 
+function updatePlaceSummary() {
+  const name = field('placeName').value.trim();
+  const country = field('country').value.trim();
+  const hasCoordinates = field('latitude').value !== '' && field('longitude').value !== '';
+  field('selectedPlaceName').textContent = name || (hasCoordinates ? 'Punkt auf dem Globus gewählt' : 'Wohin ging deine Reise?');
+  field('selectedPlaceCountry').textContent = country || (hasCoordinates
+    ? `${Number(field('latitude').value).toFixed(4)}°, ${Number(field('longitude').value).toFixed(4)}°`
+    : 'Suche einen Ort oder tippe auf den Globus.');
+}
+
+function cancelPlaceRequest() {
+  placeRequest?.abort();
+  placeRequest = null;
+  field('placeSummary').classList.remove('is-loading');
+  field('findPlace').disabled = false;
+}
+
+function applyPlace(place) {
+  field('placeName').value = place.name;
+  field('country').value = place.country;
+  field('continent').value = place.continent;
+  field('latitude').value = place.lat.toFixed(5);
+  field('longitude').value = place.lng.toFixed(5);
+  field('placeQuery').value = '';
+  field('placeResults').replaceChildren();
+  field('locationDetails').open = false;
+  elements.formError.textContent = '';
+  updatePlaceSummary();
+}
+
+async function resolveGlobePlace(coordinates) {
+  cancelPlaceRequest();
+  const controller = new AbortController();
+  placeRequest = controller;
+  field('placeSummary').classList.add('is-loading');
+  field('selectedPlaceName').textContent = 'Ort wird ermittelt …';
+  field('placeStatus').textContent = 'Stadt und Land werden für deinen Punkt gesucht.';
+  try {
+    const place = await reversePlace(coordinates, controller.signal);
+    if (placeRequest !== controller || !elements.tripDialog.open) return;
+    applyPlace(place);
+    field('placeStatus').textContent = 'Ort übernommen. Du kannst die Angaben unten bearbeiten.';
+  } catch {
+    if (placeRequest !== controller || !elements.tripDialog.open) return;
+    updatePlaceSummary();
+    field('placeStatus').textContent = 'Kein Ort ermittelt. Suche nach einem Namen oder ergänze ihn unten. Dein Punkt bleibt ausgewählt.';
+    field('locationDetails').open = true;
+  } finally {
+    if (placeRequest === controller) cancelPlaceRequest();
+  }
+}
+
+async function findPlace() {
+  const query = field('placeQuery').value.trim();
+  if (query.length < 2) {
+    field('placeStatus').textContent = 'Gib mindestens zwei Zeichen ein.';
+    field('placeQuery').focus();
+    return;
+  }
+  cancelPlaceRequest();
+  const controller = new AbortController();
+  placeRequest = controller;
+  field('findPlace').disabled = true;
+  field('placeResults').replaceChildren();
+  field('placeStatus').textContent = 'Orte werden gesucht …';
+  try {
+    const results = await searchPlaces(query, controller.signal);
+    if (placeRequest !== controller || !elements.tripDialog.open) return;
+    placeResults = results;
+    field('placeResults').innerHTML = placeResults.map((place, index) => `
+      <button type="button" data-place-index="${index}"><strong>${escapeHtml(place.name)}</strong><span>${escapeHtml([place.region, place.country].filter(Boolean).join(', '))}</span></button>`).join('');
+    field('placeStatus').textContent = placeResults.length ? 'Wähle deinen Ort aus.' : 'Keinen Ort gefunden. Versuche es mit Ort und Land oder trage ihn unten ein.';
+    if (!placeResults.length) field('locationDetails').open = true;
+  } catch {
+    if (placeRequest !== controller || !elements.tripDialog.open) return;
+    field('placeStatus').textContent = 'Ortssuche ist gerade nicht erreichbar. Du kannst den Ort unten selbst eintragen.';
+    field('locationDetails').open = true;
+  } finally {
+    if (placeRequest === controller) cancelPlaceRequest();
+  }
+}
+
+function updateDatePrecision() {
+  const precise = field('datePrecision').value === 'day';
+  for (const id of ['startDate', 'endDate']) {
+    const input = field(id);
+    const value = input.value;
+    input.type = precise ? 'date' : 'month';
+    input.value = value ? (precise ? `${value.slice(0, 7)}-${value.slice(8, 10) || '01'}` : value.slice(0, 7)) : '';
+  }
+  field('startDateLabel').textContent = precise ? 'Ankunft' : 'Monat';
+  field('endDateLabel').innerHTML = `${precise ? 'Abreise' : 'Bis'} <span class="optional">(optional)</span>`;
+  field('periodHint').textContent = precise ? 'Ohne Abreise wird die Ankunft als einzelner Tag gespeichert.' : 'Ein Monat reicht. Für längere Reisen kannst du einen Endmonat ergänzen.';
+}
+
 function openTripDialog(trip = null, coordinates = null) {
+  cancelPlaceRequest();
   elements.tripForm.reset();
+  field('locationDetails').open = false;
+  field('placeStatus').textContent = '';
+  field('placeResults').replaceChildren();
+  placeResults = [];
   elements.formError.textContent = '';
   field('tripId').value = trip?.id || '';
   field('placeName').value = trip?.name || '';
   field('country').value = trip?.country || coordinates?.country || '';
   field('continent').value = trip?.continent || '';
   const today = new Date();
-  const todayValue = new Date(today.getTime() - today.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  field('datePrecision').value = trip?.startDate.length === 10 ? 'day' : 'month';
+  updateDatePrecision();
   field('startDate').value = trip?.startDate || todayValue;
-  field('endDate').value = trip?.endDate || todayValue;
+  field('endDate').value = trip && trip.endDate !== trip.startDate ? trip.endDate : '';
   field('latitude').value = trip?.lat ?? (coordinates ? coordinates.lat.toFixed(4) : '');
   field('longitude').value = trip?.lng ?? (coordinates ? coordinates.lng.toFixed(4) : '');
   field('notes').value = trip?.notes || '';
-  const category = trip?.category || 'Urlaub';
-  const categoryRadio = elements.tripForm.querySelector(`input[name="category"][value="${CSS.escape(category)}"]`);
-  if (categoryRadio) categoryRadio.checked = true;
-  elements.dialogTitle.textContent = trip ? 'Reise bearbeiten' : 'Reise festhalten';
+  field('category').value = trip?.category || 'Urlaub';
+  elements.dialogTitle.textContent = trip ? 'Reise bearbeiten' : 'Reise hinzufügen';
   elements.deleteTrip.classList.toggle('hidden', !trip);
+  updatePlaceSummary();
   elements.tripDialog.showModal();
-  setTimeout(() => field('placeName').focus(), 50);
+  // Avoid opening the phone keyboard when a point is already selected.
+  if (trip || coordinates) field('datePrecision').focus({ preventScroll: true });
+  else field('placeQuery').focus({ preventScroll: true });
+  if (coordinates) void resolveGlobePlace(coordinates);
 }
 
 function closeTripDialog() {
+  cancelPlaceRequest();
   elements.tripDialog.close();
 }
 
@@ -270,10 +375,10 @@ function tripFromForm() {
     country: field('country').value.trim(),
     continent: field('continent').value,
     startDate: field('startDate').value,
-    endDate: field('endDate').value,
-    lat: Number(field('latitude').value),
-    lng: Number(field('longitude').value),
-    category: elements.tripForm.querySelector('input[name="category"]:checked')?.value || 'Sonstiges',
+    endDate: field('endDate').value || field('startDate').value,
+    lat: field('latitude').value === '' ? NaN : Number(field('latitude').value),
+    lng: field('longitude').value === '' ? NaN : Number(field('longitude').value),
+    category: field('category').value || 'Sonstiges',
     notes: field('notes').value.trim(),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -281,9 +386,10 @@ function tripFromForm() {
 }
 
 function validateTrip(trip) {
-  if (!trip.name || !trip.country || !trip.continent || !trip.startDate || !trip.endDate) return 'Bitte fülle alle Pflichtfelder aus.';
+  if (!trip.name || !trip.country) return 'Bitte wähle einen Ort aus oder ergänze Ort und Land.';
+  if (!trip.startDate || !trip.endDate) return 'Bitte gib den Reisezeitraum an.';
   if (!Number.isFinite(trip.lat) || trip.lat < -90 || trip.lat > 90 || !Number.isFinite(trip.lng) || trip.lng < -180 || trip.lng > 180) return 'Bitte gib gültige Koordinaten an.';
-  if (trip.endDate < trip.startDate) return 'Die Abreise darf nicht vor der Ankunft liegen.';
+  if (!validPeriod(trip.startDate, trip.endDate)) return 'Bitte prüfe den Zeitraum. Das Ende darf nicht vor dem Beginn liegen.';
   return '';
 }
 
@@ -326,40 +432,16 @@ async function initialiseGlobe() {
   try {
     world = new CesiumGlobe(elements.globe, {
       onGlobeClick: coordinates => openTripDialog(null, coordinates),
-      onPointClick: trip => window.setTimeout(() => openTripDialog(trip), 220),
+      onPointClick: trip => openTripDialog(trip),
       onReady: () => elements.globeLoading.classList.add('done'),
+      onMapError: () => { elements.globeTip.textContent = 'Erdtextur verfügbar. Satellitendetails benötigen eine Internetverbindung.'; },
     });
-    world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, 0);
+    world.resetView(0);
     renderGlobeData();
 
-    $('#zoomIn').addEventListener('click', () => {
-      const view = world.pointOfView();
-      world.pointOfView({ ...view, altitude: Math.max(.75, view.altitude * .78) }, .35);
-    });
-    $('#zoomOut').addEventListener('click', () => {
-      const view = world.pointOfView();
-      world.pointOfView({ ...view, altitude: Math.min(3.7, view.altitude * 1.28) }, .35);
-    });
-    $('#resetGlobe').addEventListener('click', () => world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, .65));
-    const mapMode = $('#mapMode');
-    const reliefMode = $('#reliefMode');
-    const gridToggle = $('#toggleGrid');
-    const chooseMapMode = mode => {
-      world.setMapMode(mode);
-      const mapActive = mode === 'map';
-      mapMode.classList.toggle('is-active', mapActive);
-      reliefMode.classList.toggle('is-active', !mapActive);
-      mapMode.setAttribute('aria-pressed', String(mapActive));
-      reliefMode.setAttribute('aria-pressed', String(!mapActive));
-    };
-    mapMode.addEventListener('click', () => chooseMapMode('map'));
-    reliefMode.addEventListener('click', () => chooseMapMode('relief'));
-    gridToggle.addEventListener('click', () => {
-      const visible = gridToggle.getAttribute('aria-pressed') !== 'true';
-      world.setGridVisible(visible);
-      gridToggle.classList.toggle('is-active', visible);
-      gridToggle.setAttribute('aria-pressed', String(visible));
-    });
+    $('#zoomIn').addEventListener('click', () => world.zoom(.6));
+    $('#zoomOut').addEventListener('click', () => world.zoom(1 / .6));
+    $('#resetGlobe').addEventListener('click', () => world.resetView());
   } catch (error) {
     console.error('Atlas globe initialization failed:', error);
     elements.globeLoading.innerHTML = '<span>Globus konnte nicht geladen werden.<br>Bitte prüfe die Verbindung und lade neu.</span>';
@@ -372,12 +454,41 @@ function bindEvents() {
   $$('[data-open-trip]').forEach(button => button.addEventListener('click', () => openTripDialog()));
   $$('[data-close-dialog]').forEach(button => button.addEventListener('click', closeTripDialog));
   elements.tripDialog.addEventListener('click', event => { if (event.target === elements.tripDialog) closeTripDialog(); });
+  elements.tripDialog.addEventListener('close', cancelPlaceRequest);
+  elements.tripDialog.addEventListener('cancel', cancelPlaceRequest);
+  field('findPlace').addEventListener('click', findPlace);
+  field('placeQuery').addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); void findPlace(); }
+  });
+  field('placeQuery').addEventListener('input', () => {
+    cancelPlaceRequest();
+    field('placeResults').replaceChildren();
+    field('placeStatus').textContent = '';
+    updatePlaceSummary();
+  });
+  field('placeResults').addEventListener('click', event => {
+    const button = event.target.closest('[data-place-index]');
+    const place = button && placeResults[Number(button.dataset.placeIndex)];
+    if (!place) return;
+    cancelPlaceRequest();
+    applyPlace(place);
+    field('placeStatus').textContent = 'Ort übernommen.';
+    world?.pointOfView({ lat: place.lat, lng: place.lng, altitude: .012 }, .6);
+    field('datePrecision').focus({ preventScroll: true });
+  });
+  for (const id of ['placeName', 'country', 'continent', 'latitude', 'longitude']) {
+    field(id).addEventListener('input', () => { cancelPlaceRequest(); updatePlaceSummary(); });
+  }
+  field('datePrecision').addEventListener('change', updateDatePrecision);
   elements.tripForm.addEventListener('submit', async event => {
     event.preventDefault();
     const trip = tripFromForm();
     const error = validateTrip(trip);
     elements.formError.textContent = error;
-    if (error) return;
+    if (error) {
+      if (!trip.name || !trip.country || !Number.isFinite(trip.lat) || !Number.isFinite(trip.lng)) field('locationDetails').open = true;
+      return;
+    }
     const index = database.trips.findIndex(entry => entry.id === trip.id);
     if (index >= 0) database.trips[index] = trip;
     else database.trips.push(trip);
@@ -392,7 +503,7 @@ function bindEvents() {
     if (!button) return;
     const trip = database.trips.find(entry => entry.id === button.dataset.editTrip);
     if (trip) {
-      world?.pointOfView({ lat: trip.lat, lng: trip.lng, altitude: 1.3 }, 700);
+      world?.pointOfView({ lat: trip.lat, lng: trip.lng, altitude: .012 }, .7);
       openTripDialog(trip);
     }
   });

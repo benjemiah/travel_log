@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { APP_ID, calculateStats, decodeBackup, haversineKm, tripDays } from '../dist/data.js';
+import { APP_ID, calculateStats, decodeBackup, formatDate, formatPeriod, haversineKm, tripDays, validPeriod } from '../dist/data.js';
 
 const trip = (overrides = {}) => ({
   id: 'one', name: 'Berlin', country: 'Deutschland', continent: 'Europa',
@@ -37,4 +37,43 @@ test('Import akzeptiert nur Atlas-Sicherungen mit validen Einträgen', () => {
   assert.equal(decoded.trips.length, 1);
   assert.throws(() => decodeBackup(JSON.stringify({ app: 'fremd', version: 1, trips: [] })));
   assert.throws(() => decodeBackup(JSON.stringify({ app: APP_ID, version: 1, trips: [trip({ lat: 100 })] })));
+});
+
+test('Monatseinträge überleben die Sicherung ohne erfundene Tage', () => {
+  const monthly = trip({ startDate: '2026-07', endDate: '2026-08' });
+  const decoded = decodeBackup(JSON.stringify({ app: APP_ID, version: 1, trips: [monthly], meta: {} }));
+  assert.equal(decoded.trips[0].startDate, '2026-07');
+  assert.equal(decoded.trips[0].endDate, '2026-08');
+  assert.equal(tripDays(monthly), 0);
+  assert.equal(calculateStats([monthly]).days, 0);
+  assert.match(formatDate('2026-07'), /Juli 2026/);
+  assert.match(formatDate('2026-07', { day: '2-digit', month: 'short' }), /^Jul/);
+  assert.match(formatPeriod(monthly), /Juli 2026 – Aug\. 2026/);
+});
+
+test('Monate, Tagesdaten und ihre Zeiträume werden streng validiert', () => {
+  assert.equal(validPeriod('2026-07', '2026-07'), true);
+  assert.equal(validPeriod('2026-12', '2027-01'), true);
+  assert.equal(validPeriod('2026-13', '2027-01'), false);
+  assert.equal(validPeriod('0000-01', '0000-02'), false);
+  assert.equal(validPeriod('2026-08', '2026-07'), false);
+  assert.equal(validPeriod('2026-07', '2026-07-01'), false);
+  assert.equal(validPeriod('2026-02-29', '2026-03-01'), false);
+  assert.throws(() => decodeBackup({ app: APP_ID, version: 1, trips: [trip({ startDate: '2026-13', endDate: '2026-13' })] }));
+});
+
+test('Gemischte Datumsgenauigkeit zählt Reisen nach Jahr und nur bekannte Reisetage', () => {
+  const stats = calculateStats([
+    trip({ startDate: '2026-12', endDate: '2027-01', continent: '' }),
+    trip({ id: 'daily', startDate: '2026-03-27', endDate: '2026-03-30' }),
+  ]);
+  assert.equal(stats.days, 4);
+  assert.equal(stats.yearVisits.get(2026), 2);
+  assert.equal(stats.yearVisits.has(2027), false);
+  assert.equal(stats.continentCount, 1);
+});
+
+test('Mehrtagereisen bleiben über Zeitumstellungen korrekt', () => {
+  assert.equal(tripDays(trip({ startDate: '2026-03-27', endDate: '2026-03-30' })), 4);
+  assert.equal(tripDays(trip({ startDate: '2026-10-23', endDate: '2026-10-26' })), 4);
 });

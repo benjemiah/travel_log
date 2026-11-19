@@ -1,4 +1,4 @@
-const CACHE = 'atlas-shell-v5';
+const CACHE = 'atlas-shell-v6';
 const NATURAL_EARTH = ['./vendor/cesium/Assets/Textures/NaturalEarthII/tilemapresource.xml'];
 for (let level = 0; level <= 2; level += 1) {
   const columns = 2 ** (level + 1);
@@ -10,7 +10,7 @@ for (let level = 0; level <= 2; level += 1) {
   }
 }
 const SHELL = [
-  './', './index.html', './styles.css?v=5', './app.js?v=5', './data.js', './storage.js', './cesium-globe.js?v=5',
+  './', './index.html', './styles.css?v=6', './app.js?v=6', './data.js', './storage.js', './places.js', './cesium-globe.js?v=6',
   './manifest.webmanifest', './icon.svg', './vendor/cesium/Cesium.js', './vendor/cesium/Widgets/widgets.css',
   ...NATURAL_EARTH,
 ];

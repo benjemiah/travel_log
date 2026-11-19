@@ -3,190 +3,116 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#07131f">
-  <meta name="description" content="Privates Reisetagebuch mit 3D-Globus – alle Daten bleiben in deinem Browser.">
-  <title>Atlas · Dein privates Reisetagebuch</title>
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Deine Reisen auf einem Globus. Einfach festhalten, privat im Browser speichern.">
+  <title>Atlas · Deine Reisen</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./vendor/cesium/Widgets/widgets.css">
-  <link rel="stylesheet" href="./styles.css?v=5">
+  <link rel="stylesheet" href="./styles.css?v=6">
 </head>
 <body>
   <a class="skip-link" href="#content">Zum Inhalt</a>
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="Atlas Startseite">
-      <span class="brand-mark" aria-hidden="true">◎</span>
-      <span>ATLAS</span>
-    </a>
+    <a class="brand" href="#top" aria-label="Atlas Startseite"><span class="brand-mark" aria-hidden="true">◎</span> atlas<span class="brand-dot">.</span></a>
     <div class="header-actions">
-      <span class="save-state" id="saveState"><span class="status-dot"></span> Lokal gespeichert</span>
-      <button class="button button-primary button-small" type="button" data-open-trip>
-        <span aria-hidden="true">＋</span> Reise eintragen
-      </button>
+      <span class="save-state" id="saveState" role="status">Lokal gespeichert</span>
+      <button class="button button-primary" type="button" data-open-trip><span aria-hidden="true">＋</span> Reise hinzufügen</button>
     </div>
   </header>
 
   <main id="content">
     <section class="hero" id="top" aria-labelledby="heroTitle">
-      <div class="globe-heading">
-        <h1 id="heroTitle">Deine Reisen</h1>
-        <p>Alle Daten bleiben in diesem Browser.</p>
-      </div>
+      <div class="globe-heading"><h1 id="heroTitle">Deine kleine Welt.</h1><p>Große Reisen. Kleine Ausflüge. Alles an einem Ort.</p></div>
       <div class="globe-stage" id="globeStage">
-        <div id="globe" role="img" aria-label="Interaktiver 3D-Globus mit deinen besuchten Orten"></div>
-        <div class="globe-loading" id="globeLoading">
-          <span class="loader-orbit"></span>
-          <span>Globus wird geladen …</span>
-        </div>
-        <div class="globe-tip" id="globeTip">Klicken, um einen Ort hinzuzufügen</div>
-        <div class="globe-layers" aria-label="Kartendarstellung">
-          <div class="layer-switch" role="group" aria-label="Kartenstil">
-            <button type="button" id="mapMode" class="is-active" aria-pressed="true">Karte</button>
-            <button type="button" id="reliefMode" aria-pressed="false">Relief</button>
-          </div>
-          <button class="grid-toggle is-active" type="button" id="toggleGrid" aria-pressed="true">Grid</button>
-        </div>
-        <div class="globe-controls" aria-label="Globussteuerung">
-          <button type="button" id="zoomIn" aria-label="Hineinzoomen">＋</button>
-          <button type="button" id="zoomOut" aria-label="Herauszoomen">−</button>
-          <button type="button" id="resetGlobe" aria-label="Globusansicht zurücksetzen">↺</button>
+        <div id="globe" role="region" aria-label="Interaktiver Globus. Ziehen zum Drehen, mit zwei Fingern zoomen. Einen Ort antippen, um eine Reise hinzuzufügen."></div>
+        <div class="globe-loading" id="globeLoading" role="status"><span class="loader-orbit" aria-hidden="true"></span><span>Deine Welt wird geladen …</span></div>
+        <div class="globe-controls" role="group" aria-label="Globussteuerung">
+          <button type="button" id="zoomIn" aria-label="Hineinzoomen" title="Hineinzoomen">＋</button>
+          <button type="button" id="zoomOut" aria-label="Herauszoomen" title="Herauszoomen">−</button>
+          <button type="button" id="resetGlobe" aria-label="Ganze Erde anzeigen" title="Ganze Erde anzeigen">↺</button>
         </div>
       </div>
-    </section>
-
-    <section class="metric-strip" aria-label="Reisestatistik im Überblick">
-      <article><span class="metric-number" id="countriesMetric">0</span><span class="metric-label">Länder</span></article>
-      <article><span class="metric-number" id="placesMetric">0</span><span class="metric-label">Orte</span></article>
-      <article><span class="metric-number" id="daysMetric">0</span><span class="metric-label">Reisetage</span></article>
-      <article><span class="metric-number" id="continentsMetric">0</span><span class="metric-label">Kontinente</span></article>
-      <article><span class="metric-number metric-distance" id="distanceMetric">0 km</span><span class="metric-label">Reiseroute</span></article>
+      <p class="globe-tip" id="globeTip">Drehen, zoomen, Ort antippen.</p>
+      <div class="metric-strip" aria-label="Deine Reisen im Überblick">
+        <div><strong id="placesMetric">0</strong><span>Reisen</span></div>
+        <div><strong id="countriesMetric">0</strong><span>Länder</span></div>
+        <div><strong id="continentsMetric">0</strong><span>Kontinente</span></div>
+      </div>
     </section>
 
     <section class="content-section journey-section" aria-labelledby="journeysTitle">
-      <div class="section-heading">
-        <h2 id="journeysTitle">Reisen</h2>
-        <div class="list-tools">
-          <label class="search-field">
-            <span class="sr-only">Reisen durchsuchen</span>
-            <span aria-hidden="true">⌕</span>
-            <input id="tripSearch" type="search" placeholder="Ort, Land oder Notiz">
-          </label>
-          <select id="yearFilter" aria-label="Nach Jahr filtern"><option value="all">Alle Jahre</option></select>
-        </div>
+      <div class="section-heading"><h2 id="journeysTitle">Deine Erinnerungen</h2><span class="section-note">Ein Ort. Ein Moment.</span></div>
+      <div class="list-tools">
+        <label class="search-field"><span class="sr-only">Reisen durchsuchen</span><span aria-hidden="true">⌕</span><input id="tripSearch" type="search" placeholder="Reisen durchsuchen"></label>
+        <select id="yearFilter" aria-label="Nach Jahr filtern"><option value="all">Alle Jahre</option></select>
       </div>
-      <div class="empty-state" id="emptyState">
-        <h3>Noch keine Reisen</h3>
-        <p>Klicke auf den Globus oder füge einen Eintrag hinzu.</p>
-        <button class="button button-ink" type="button" data-open-trip>Reise eintragen</button>
-      </div>
+      <div class="empty-state" id="emptyState"><span class="empty-mark" aria-hidden="true">＋</span><h3>Wo warst du schon?</h3><p>Tippe auf den Globus oder suche nach deinem ersten Reiseziel.</p><button class="button button-primary" type="button" data-open-trip>Erste Reise hinzufügen</button></div>
       <div class="timeline" id="timeline" aria-live="polite"></div>
     </section>
 
-    <section class="content-section insights" aria-labelledby="insightsTitle">
-      <div class="section-heading compact">
-        <h2 id="insightsTitle">Statistik</h2>
-      </div>
+    <details class="content-section extra-section" id="insights">
+      <summary>Deine Reisestatistik</summary>
       <div class="insight-grid">
-        <article class="insight-card highlight-card">
-          <p class="card-kicker">Meistbesuchtes Land</p>
-          <div class="big-answer" id="topCountry">Noch offen</div>
-          <p id="topCountryDetail">Noch keine Daten</p>
-        </article>
-        <article class="insight-card">
-          <p class="card-kicker">Reisetage nach Jahr</p>
-          <div class="year-chart" id="yearChart"><p class="chart-placeholder">Noch keine Daten</p></div>
-        </article>
-        <article class="insight-card">
-          <p class="card-kicker">Deine Kontinente</p>
-          <div class="continent-list" id="continentList"><p class="chart-placeholder">Noch keine Daten</p></div>
-        </article>
+        <article class="insight-card"><h3>Meistbesuchtes Land</h3><div class="big-answer" id="topCountry">Noch offen</div><p id="topCountryDetail">Noch keine Daten</p></article>
+        <article class="insight-card"><h3>Reisen nach Jahr</h3><div class="year-chart" id="yearChart"><p class="chart-placeholder">Noch keine Daten</p></div></article>
+        <article class="insight-card"><h3>Deine Kontinente</h3><div class="continent-list" id="continentList"><p class="chart-placeholder">Noch keine Daten</p></div></article>
       </div>
-    </section>
+      <p class="distance-note">Deine Reiseroute: <strong id="distanceMetric">0 km</strong> Luftlinie zwischen aufeinanderfolgenden Reisezielen.</p>
+    </details>
 
-    <section class="backup-section" id="backup" aria-labelledby="backupTitle">
-      <div class="backup-copy">
-        <h2 id="backupTitle">Datensicherung</h2>
-        <p>Einträge werden nur in diesem Browser gespeichert. Exportiere regelmäßig eine JSON-Sicherung.</p>
-        <p class="backup-status" id="backupStatus">Noch keine Sicherung in diesem Browser erstellt.</p>
-      </div>
+    <details class="content-section extra-section backup-section" id="backup">
+      <summary>Daten &amp; Sicherung</summary>
+      <p>Deine Reisen bleiben in diesem Browser. Mit einer Sicherung kannst du sie aufbewahren oder auf ein anderes Gerät mitnehmen.</p>
+      <p class="backup-status" id="backupStatus">Noch keine Sicherung erstellt.</p>
       <div class="backup-actions">
-        <button class="button button-acid" type="button" id="exportBackup">Sicherung herunterladen</button>
-        <button class="button button-outline-light" type="button" id="shareBackup">Sicherung teilen</button>
-        <button class="text-button" type="button" id="importBackup">Sicherung wiederherstellen</button>
-        <input type="file" id="backupFile" accept=".json,application/json" hidden>
+        <button class="button button-primary" type="button" id="exportBackup">Sicherung speichern</button>
+        <button class="button button-ghost" type="button" id="shareBackup">Teilen</button>
+        <button class="button button-ghost" type="button" id="importBackup">Wiederherstellen</button>
+        <input id="backupFile" type="file" accept="application/json,.json" hidden>
       </div>
-      <details class="cloud-help">
-        <summary>Wie sichere ich in Google Drive, iCloud oder Gmail?</summary>
-        <div>
-          <p><strong>iPhone/iPad:</strong> „Sicherung teilen“ → „In Dateien sichern“ → iCloud Drive. Alternativ Mail oder die Google-Drive-App im Teilen-Menü wählen.</p>
-          <p><strong>Android:</strong> „Sicherung teilen“ und Drive oder Gmail wählen. Am Computer die heruntergeladene JSON-Datei in Drive/iCloud hochladen oder an dich selbst mailen.</p>
-          <p>„Mit Apple anmelden“ allein ist kein Backup-Speicher. Eine vollautomatische Drive-Synchronisierung würde eine separat konfigurierte OAuth-App benötigen.</p>
-        </div>
-      </details>
-    </section>
+    </details>
   </main>
 
-  <footer>
-    <a class="brand footer-brand" href="#top"><span class="brand-mark">◎</span> ATLAS</a>
-    <p>Lokal gespeichert · CesiumJS</p>
-    <a href="#backup">Daten sichern</a>
-  </footer>
+  <footer><span>Dein Atlas. Privat gespeichert.</span><span>Globus mit CesiumJS · Ortssuche: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a> / <a href="https://photon.komoot.io" target="_blank" rel="noopener noreferrer">Photon</a></span></footer>
 
-  <dialog class="trip-dialog" id="tripDialog">
-    <form method="dialog" id="tripForm">
-      <div class="dialog-header">
-        <div><p class="eyebrow dark">Neuer Eintrag</p><h2 id="dialogTitle">Reise festhalten</h2></div>
-        <button class="icon-button" type="button" data-close-dialog aria-label="Dialog schließen">×</button>
-      </div>
+  <dialog class="trip-dialog" id="tripDialog" aria-labelledby="dialogTitle">
+    <form id="tripForm" novalidate>
+      <div class="dialog-header"><h2 id="dialogTitle">Reise hinzufügen</h2><button class="icon-button" type="button" data-close-dialog aria-label="Dialog schließen">×</button></div>
       <input type="hidden" id="tripId">
-      <div class="form-grid">
-        <label class="field field-wide"><span>Ort *</span><input id="placeName" name="placeName" required maxlength="80" placeholder="z. B. Kyoto"></label>
-        <label class="field"><span>Land *</span><input id="country" name="country" required maxlength="80" placeholder="z. B. Japan"></label>
-        <label class="field"><span>Kontinent *</span>
-          <select id="continent" name="continent" required>
-            <option value="">Bitte wählen</option><option>Afrika</option><option>Asien</option><option>Europa</option><option>Nordamerika</option><option>Südamerika</option><option>Ozeanien</option><option>Antarktika</option>
-          </select>
-        </label>
-        <label class="field"><span>Ankunft *</span><input id="startDate" name="startDate" type="date" required></label>
-        <label class="field"><span>Abreise *</span><input id="endDate" name="endDate" type="date" required></label>
-        <label class="field"><span>Breitengrad *</span><input id="latitude" name="latitude" type="number" min="-90" max="90" step="0.0001" required placeholder="35.6762"></label>
-        <label class="field"><span>Längengrad *</span><input id="longitude" name="longitude" type="number" min="-180" max="180" step="0.0001" required placeholder="139.6503"></label>
-        <fieldset class="field field-wide category-field">
-          <legend>Art der Reise</legend>
-          <div class="segmented">
-            <label><input type="radio" name="category" value="Urlaub" checked><span>Urlaub</span></label>
-            <label><input type="radio" name="category" value="Wochenende"><span>Wochenende</span></label>
-            <label><input type="radio" name="category" value="Arbeit"><span>Arbeit</span></label>
-            <label><input type="radio" name="category" value="Besuch"><span>Besuch</span></label>
-            <label><input type="radio" name="category" value="Sonstiges"><span>Sonstiges</span></label>
-          </div>
-        </fieldset>
-        <label class="field field-wide"><span>Notizen</span><textarea id="notes" name="notes" maxlength="1000" rows="4" placeholder="Was möchtest du von dieser Reise behalten?"></textarea></label>
+      <div class="place-summary" id="placeSummary" aria-live="polite"><span class="place-marker" aria-hidden="true">◎</span><div><strong id="selectedPlaceName">Wohin ging deine Reise?</strong><span id="selectedPlaceCountry">Suche einen Ort oder tippe auf den Globus.</span></div></div>
+      <label class="field" for="placeQuery">Ort suchen</label>
+      <div class="place-search"><input id="placeQuery" type="search" placeholder="z. B. Berlin, Deutschland" maxlength="120" autocomplete="off" enterkeyhint="search" aria-describedby="placeStatus"><button class="button button-ghost" id="findPlace" type="button">Suchen</button></div>
+      <p class="field-hint" id="placeStatus" role="status"></p>
+      <div class="place-results" id="placeResults" aria-label="Gefundene Orte"></div>
+
+      <div class="period-heading"><h3>Wann warst du dort?</h3><select id="datePrecision" aria-label="Genauigkeit des Reisezeitraums"><option value="month">Monat &amp; Jahr</option><option value="day">Genaue Tage</option></select></div>
+      <div class="form-grid period-fields">
+        <label class="field"><span id="startDateLabel">Monat</span><input id="startDate" name="startDate" type="month" placeholder="JJJJ-MM" required></label>
+        <label class="field"><span id="endDateLabel">Bis <span class="optional">(optional)</span></span><input id="endDate" name="endDate" type="month" placeholder="JJJJ-MM" aria-describedby="periodHint"></label>
       </div>
+      <p class="field-hint" id="periodHint">Ein Monat reicht. Für längere Reisen kannst du einen Endmonat ergänzen.</p>
+      <label class="field notes-field"><span>Notiz <span class="optional">(optional)</span></span><textarea id="notes" name="notes" maxlength="1000" rows="2" placeholder="Was bleibt in Erinnerung?"></textarea></label>
+
+      <details class="form-details" id="locationDetails"><summary>Ort &amp; Koordinaten bearbeiten</summary>
+        <div class="form-grid">
+          <label class="field"><span>Ort</span><input id="placeName" name="placeName" maxlength="80" placeholder="Berlin"></label>
+          <label class="field"><span>Land</span><input id="country" name="country" maxlength="80" placeholder="Deutschland"></label>
+          <label class="field"><span>Breitengrad</span><input id="latitude" name="latitude" type="number" min="-90" max="90" step="any" placeholder="52.5200"></label>
+          <label class="field"><span>Längengrad</span><input id="longitude" name="longitude" type="number" min="-180" max="180" step="any" placeholder="13.4050"></label>
+          <label class="field"><span>Kontinent <span class="optional">(optional)</span></span><select id="continent" name="continent"><option value="">Nicht zugeordnet</option><option>Afrika</option><option>Asien</option><option>Europa</option><option>Nordamerika</option><option>Südamerika</option><option>Ozeanien</option><option>Antarktika</option></select></label>
+          <label class="field"><span>Art der Reise</span><select id="category" name="category"><option>Urlaub</option><option>Wochenende</option><option>Arbeit</option><option>Besuch</option><option>Sonstiges</option></select></label>
+        </div>
+      </details>
       <p class="form-error" id="formError" role="alert"></p>
-      <div class="dialog-footer">
-        <button class="text-button danger hidden" id="deleteTrip" type="button">Eintrag löschen</button>
-        <span class="dialog-spacer"></span>
-        <button class="button button-ghost" type="button" data-close-dialog>Abbrechen</button>
-        <button class="button button-ink" type="submit">Lokal speichern</button>
-      </div>
+      <div class="dialog-footer"><button class="text-button danger hidden" id="deleteTrip" type="button">Löschen</button><span class="dialog-spacer"></span><button class="button button-ghost" type="button" data-close-dialog>Abbrechen</button><button class="button button-primary" type="submit" id="saveTrip">Speichern</button></div>
     </form>
   </dialog>
 
-  <dialog class="confirm-dialog" id="confirmDialog">
-    <div class="confirm-symbol" aria-hidden="true">!</div>
-    <h2 id="confirmTitle">Bist du sicher?</h2>
-    <p id="confirmMessage"></p>
-    <div class="confirm-actions">
-      <button class="button button-ghost" type="button" id="confirmCancel">Abbrechen</button>
-      <button class="button button-danger" type="button" id="confirmAction">Bestätigen</button>
-    </div>
-  </dialog>
-
+  <dialog class="confirm-dialog" id="confirmDialog" aria-labelledby="confirmTitle"><h2 id="confirmTitle">Bist du sicher?</h2><p id="confirmMessage"></p><div class="confirm-actions"><button class="button button-ghost" type="button" id="confirmCancel">Abbrechen</button><button class="button button-danger" type="button" id="confirmAction">Bestätigen</button></div></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
   <script>window.CESIUM_BASE_URL = new URL('./vendor/cesium/', document.baseURI).href;</script>
   <script src="./vendor/cesium/Cesium.js"></script>
-  <script type="module" src="./app.js?v=5"></script>
+  <script type="module" src="./app.js?v=6"></script>
 </body>
 </html>

@@ -10,7 +10,21 @@ Eine statische, datenschutzfreundliche GitHub-Pages-App. Besuche werden auf eine
 - Das Löschen von Website-Daten, ein Browserwechsel oder ein Geräteverlust kann lokale Daten entfernen. Deshalb regelmäßig eine JSON-Sicherung exportieren.
 - Verschiedene Browser, Profile, Geräte und eine installierte PWA haben gegebenenfalls getrennte Speicher.
 
-Der 3D-Globus wird mit **CesiumJS** gerendert. Die Standardansicht lädt hochauflösende Kartenkacheln mit Städten und Ortsnamen direkt von **OpenStreetMap**; dafür ist kein Konto oder API-Token nötig. Dabei gehen keine gespeicherten Reisedaten an OpenStreetMap, der Dienst sieht aber technisch die gerade sichtbaren Kartenausschnitte und übliche Verbindungsdaten. Über „Relief“ lässt sich jederzeit auf die lokal ausgelieferte Natural-Earth-II-Textur wechseln, die auch offline funktioniert.
+Der 3D-Globus wird mit **CesiumJS** gerendert. Satellitenbilder von **Esri World Imagery** und transparente Ortsnamen aus **World Boundaries and Places** werden gemeinsam angezeigt. Beim Zoomen werden automatisch detailliertere Kacheln geladen; ein Kartenwechsel ist nicht nötig. Die lokal ausgelieferte Natural-Earth-II-Textur bleibt darunter als Offline-Grundlage erhalten. Satellitenbilder und Ortsnamen benötigen Internetzugang. Die Quellenangaben sind direkt im Globus sichtbar.
+
+Beim Antippen eines Punktes ermittelt **Photon (Komoot / OpenStreetMap)** den Ort und das Land und übernimmt sie zusammen mit den gewählten Koordinaten direkt in die Reiseansicht. Alternativ lässt sich ein Ort ausdrücklich suchen und aus den Ergebnissen auswählen. Es gibt keine Anfragen während des Tippens, erfolgreiche Suchergebnisse werden für die Sitzung zwischengespeichert. Die öffentliche Photon-Instanz ist für moderate Nutzung vorgesehen und hat keine Verfügbarkeitsgarantie; bei Ausfällen ist die manuelle Eingabe möglich. Der Endpunkt ist in `dist/places.js` zentral konfiguriert.
+
+Die Kartenanbieter sehen die angeforderten Kartenausschnitte. Photon erhält nur die explizit gesuchten Ortsnamen bzw. den angetippten Punkt sowie übliche Verbindungsdaten. Gespeicherte Reisen, Notizen und Reisezeiten werden nicht an diese Dienste übertragen.
+
+## Reisen eintragen
+
+- Globus mit einem Finger drehen, mit zwei Fingern oder dem Mausrad zoomen. Die Plus-/Minus-Tasten zoomen ebenfalls bis auf Stadtebene. Der Globus dreht sich nicht von selbst weiter.
+- Einen Ort antippen oder über **Reise hinzufügen → Ort suchen** auswählen. Stadt, Land und Koordinaten erscheinen direkt im Formular; unter **Ort & Koordinaten bearbeiten** lassen sie sich korrigieren.
+- Standardmäßig reicht **Monat & Jahr**. Ein Endmonat ist optional. **Genaue Tage** bleibt für exakte Zeiträume und bestehende Einträge verfügbar.
+- Monatseinträge bleiben als `YYYY-MM` gespeichert; es werden keine Reisetage erfunden. Bestehende Tagesdaten und Sicherungen bleiben lesbar. Die Jahresstatistik zählt Reisen anhand ihres Beginns.
+- Statistik und Datensicherung sind aufklappbar. Die Oberfläche passt sich an Handy und Desktop an.
+
+Die Kartenkombination folgt dem Schichtenmodell der [Cesium-Sandcastle-Beispiele](https://sandcastle.cesium.com/?src=Imagery%20Layers.html) und der [OpenLayers-Beispiele mit ArcGIS](https://openlayers.org/en/latest/examples/arcgis-image.html). Die Ortsauflösung verwendet die [Photon-API](https://github.com/komoot/photon/blob/master/docs/api-v1.md).
 
 ## Lokal starten
 
