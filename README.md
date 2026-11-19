@@ -10,7 +10,7 @@ Eine statische, datenschutzfreundliche GitHub-Pages-App. Besuche werden auf eine
 - Das Löschen von Website-Daten, ein Browserwechsel oder ein Geräteverlust kann lokale Daten entfernen. Deshalb regelmäßig eine JSON-Sicherung exportieren.
 - Verschiedene Browser, Profile, Geräte und eine installierte PWA haben gegebenenfalls getrennte Speicher.
 
-Der 3D-Globus wird mit **CesiumJS** und der lokal ausgelieferten **Natural-Earth-II-Textur** gerendert. Die App braucht weder ein Cesium-ion-Konto noch einen Kartendienst oder API-Token. Sie lädt keine Karten, Schriften, Analyse-Skripte oder sonstigen Dateien von Drittanbietern.
+Der 3D-Globus wird mit **CesiumJS** gerendert. Die Standardansicht lädt hochauflösende Kartenkacheln mit Städten und Ortsnamen direkt von **OpenStreetMap**; dafür ist kein Konto oder API-Token nötig. Dabei gehen keine gespeicherten Reisedaten an OpenStreetMap, der Dienst sieht aber technisch die gerade sichtbaren Kartenausschnitte und übliche Verbindungsdaten. Über „Relief“ lässt sich jederzeit auf die lokal ausgelieferte Natural-Earth-II-Textur wechseln, die auch offline funktioniert.
 
 ## Lokal starten
 

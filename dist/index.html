@@ -9,7 +9,7 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./vendor/cesium/Widgets/widgets.css">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=5">
 </head>
 <body>
   <a class="skip-link" href="#content">Zum Inhalt</a>
@@ -39,6 +39,13 @@
           <span>Globus wird geladen …</span>
         </div>
         <div class="globe-tip" id="globeTip">Klicken, um einen Ort hinzuzufügen</div>
+        <div class="globe-layers" aria-label="Kartendarstellung">
+          <div class="layer-switch" role="group" aria-label="Kartenstil">
+            <button type="button" id="mapMode" class="is-active" aria-pressed="true">Karte</button>
+            <button type="button" id="reliefMode" aria-pressed="false">Relief</button>
+          </div>
+          <button class="grid-toggle is-active" type="button" id="toggleGrid" aria-pressed="true">Grid</button>
+        </div>
         <div class="globe-controls" aria-label="Globussteuerung">
           <button type="button" id="zoomIn" aria-label="Hineinzoomen">＋</button>
           <button type="button" id="zoomOut" aria-label="Herauszoomen">−</button>
@@ -180,6 +187,6 @@
 
   <script>window.CESIUM_BASE_URL = new URL('./vendor/cesium/', document.baseURI).href;</script>
   <script src="./vendor/cesium/Cesium.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=5"></script>
 </body>
 </html>

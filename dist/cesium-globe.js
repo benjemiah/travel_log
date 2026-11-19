@@ -1,4 +1,5 @@
 const HEIGHT_PER_ALTITUDE = 7_000_000;
+const MAP_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export class CesiumGlobe {
   constructor(container, { onGlobeClick, onPointClick, onReady } = {}) {
@@ -10,6 +11,8 @@ export class CesiumGlobe {
     this.lastInteraction = performance.now();
     this.reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.entityTrips = new Map();
+    this.selectionEntityIds = new Set();
+    this.selectedTripId = null;
 
     const textureUrl = Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII');
     const baseLayer = Cesium.ImageryLayer.fromProviderAsync(
@@ -56,8 +59,33 @@ export class CesiumGlobe {
       baseLayer.hue = -.03;
     });
 
+    const streetProvider = new Cesium.UrlTemplateImageryProvider({
+      url: MAP_TILE_URL,
+      maximumLevel: 19,
+      enablePickFeatures: false,
+      hasAlphaChannel: false,
+      credit: new Cesium.Credit(
+        '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a>',
+        true,
+      ),
+    });
+    this.streetLayer = new Cesium.ImageryLayer(streetProvider, {
+      brightness: .78,
+      contrast: 1.08,
+      saturation: .72,
+      gamma: .92,
+    });
+    this.viewer.imageryLayers.add(this.streetLayer);
+    this.streetLayer.magnificationFilter = Cesium.TextureMagnificationFilter.LINEAR;
+    this.streetLayer.minificationFilter = Cesium.TextureMinificationFilter.LINEAR;
+
     this.dataSource = new Cesium.CustomDataSource('atlas-trips');
+    this.gridDataSource = new Cesium.CustomDataSource('atlas-grid');
+    this.selectionDataSource = new Cesium.CustomDataSource('atlas-selection');
+    this.createGrid();
+    this.viewer.dataSources.add(this.gridDataSource);
     this.viewer.dataSources.add(this.dataSource);
+    this.viewer.dataSources.add(this.selectionDataSource);
     this.bindPicking();
     this.bindRotation();
 
@@ -86,7 +114,9 @@ export class CesiumGlobe {
       const picked = viewer.scene.pick(movement.position);
       const pickedId = picked?.id?.id;
       if (pickedId && this.entityTrips.has(pickedId)) {
-        this.onPointClick?.(this.entityTrips.get(pickedId));
+        const trip = this.entityTrips.get(pickedId);
+        this.highlightTrip(trip);
+        this.onPointClick?.(trip);
         return;
       }
       const cartesian = viewer.camera.pickEllipsoid(movement.position, viewer.scene.globe.ellipsoid);
@@ -97,6 +127,38 @@ export class CesiumGlobe {
         lng: Cesium.Math.toDegrees(coordinates.longitude),
       });
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  }
+
+  createGrid() {
+    const { Cesium } = this;
+    const entities = this.gridDataSource.entities;
+    const gridHeight = 28_000;
+    const addLine = (id, coordinates, major) => entities.add({
+      id,
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights(coordinates),
+        width: major ? 1.25 : .8,
+        arcType: Cesium.ArcType.NONE,
+        material: Cesium.Color.WHITE.withAlpha(major ? .25 : .13),
+      },
+    });
+
+    entities.suspendEvents();
+    for (let latitude = -75; latitude <= 75; latitude += 15) {
+      const coordinates = [];
+      for (let longitude = -180; longitude <= 180; longitude += 3) {
+        coordinates.push(longitude, latitude, gridHeight);
+      }
+      addLine(`grid-lat-${latitude}`, coordinates, latitude % 30 === 0);
+    }
+    for (let longitude = -180; longitude < 180; longitude += 15) {
+      const coordinates = [];
+      for (let latitude = -87; latitude <= 87; latitude += 3) {
+        coordinates.push(longitude, latitude, gridHeight);
+      }
+      addLine(`grid-lng-${longitude}`, coordinates, longitude % 30 === 0);
+    }
+    entities.resumeEvents();
   }
 
   bindRotation() {
@@ -118,6 +180,7 @@ export class CesiumGlobe {
   setData(trips) {
     const { Cesium } = this;
     this.dataSource.entities.removeAll();
+    this.clearSelection(false);
     this.entityTrips.clear();
     const ordered = [...trips].sort((a, b) => a.startDate.localeCompare(b.startDate));
 
@@ -171,6 +234,67 @@ export class CesiumGlobe {
         },
       });
     }
+
+    const selectedTrip = ordered.find(trip => trip.id === this.selectedTripId);
+    if (selectedTrip) this.highlightTrip(selectedTrip);
+    else this.selectedTripId = null;
+  }
+
+  highlightTrip(trip) {
+    if (!trip) return;
+    const { Cesium } = this;
+    this.clearSelection(false);
+    this.selectedTripId = trip.id;
+    const position = Cesium.Cartesian3.fromDegrees(trip.lng, trip.lat, 30_000);
+    const pointerId = `selected-pointer-${trip.id}`;
+    const ringId = `selected-ring-${trip.id}`;
+    const pin = new Cesium.PinBuilder().fromColor(
+      Cesium.Color.fromCssColorString('#ff7658'),
+      52,
+    );
+
+    this.selectionDataSource.entities.add({
+      id: ringId,
+      position,
+      point: {
+        pixelSize: 38,
+        color: Cesium.Color.TRANSPARENT,
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 3,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(500_000, 1.15, 18_000_000, .7),
+      },
+    });
+    this.selectionDataSource.entities.add({
+      id: pointerId,
+      position,
+      billboard: {
+        image: pin,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -13),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(500_000, 1, 18_000_000, .62),
+      },
+    });
+    this.selectionEntityIds.add(pointerId);
+    this.selectionEntityIds.add(ringId);
+    this.entityTrips.set(pointerId, trip);
+    this.entityTrips.set(ringId, trip);
+  }
+
+  clearSelection(resetSelectedId = true) {
+    this.selectionDataSource?.entities.removeAll();
+    for (const id of this.selectionEntityIds) this.entityTrips.delete(id);
+    this.selectionEntityIds.clear();
+    if (resetSelectedId) this.selectedTripId = null;
+  }
+
+  setGridVisible(visible) {
+    this.gridDataSource.show = Boolean(visible);
+  }
+
+  setMapMode(mode) {
+    this.streetLayer.show = mode === 'map';
   }
 
   pointOfView(view, duration = .6) {

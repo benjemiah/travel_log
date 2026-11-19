@@ -1,6 +1,6 @@
 import { calculateStats, createId, decodeBackup, formatDate, serializeBackup, tripDays } from './data.js';
 import { loadDatabase, saveDatabase } from './storage.js';
-import { CesiumGlobe } from './cesium-globe.js';
+import { CesiumGlobe } from './cesium-globe.js?v=5';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -326,7 +326,7 @@ async function initialiseGlobe() {
   try {
     world = new CesiumGlobe(elements.globe, {
       onGlobeClick: coordinates => openTripDialog(null, coordinates),
-      onPointClick: trip => openTripDialog(trip),
+      onPointClick: trip => window.setTimeout(() => openTripDialog(trip), 220),
       onReady: () => elements.globeLoading.classList.add('done'),
     });
     world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, 0);
@@ -341,7 +341,27 @@ async function initialiseGlobe() {
       world.pointOfView({ ...view, altitude: Math.min(3.7, view.altitude * 1.28) }, .35);
     });
     $('#resetGlobe').addEventListener('click', () => world.pointOfView({ lat: 24, lng: 15, altitude: 2.15 }, .65));
+    const mapMode = $('#mapMode');
+    const reliefMode = $('#reliefMode');
+    const gridToggle = $('#toggleGrid');
+    const chooseMapMode = mode => {
+      world.setMapMode(mode);
+      const mapActive = mode === 'map';
+      mapMode.classList.toggle('is-active', mapActive);
+      reliefMode.classList.toggle('is-active', !mapActive);
+      mapMode.setAttribute('aria-pressed', String(mapActive));
+      reliefMode.setAttribute('aria-pressed', String(!mapActive));
+    };
+    mapMode.addEventListener('click', () => chooseMapMode('map'));
+    reliefMode.addEventListener('click', () => chooseMapMode('relief'));
+    gridToggle.addEventListener('click', () => {
+      const visible = gridToggle.getAttribute('aria-pressed') !== 'true';
+      world.setGridVisible(visible);
+      gridToggle.classList.toggle('is-active', visible);
+      gridToggle.setAttribute('aria-pressed', String(visible));
+    });
   } catch (error) {
+    console.error('Atlas globe initialization failed:', error);
     elements.globeLoading.innerHTML = '<span>Globus konnte nicht geladen werden.<br>Bitte prüfe die Verbindung und lade neu.</span>';
     elements.globeTip.hidden = true;
     showToast(error.message, 6000);
